@@ -1,0 +1,153 @@
+{
+"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+"contentVersion": "1.0.0.0",
+"parameters": {},
+"functions": [],
+"variables": {
+    "suffix": "[substring(resourceGroup().name, sub(length(resourceGroup().name), 6),6)]",
+    "location": "[resourceGroup().location]",
+    "dtlName": "DTL-NMC-DTL-UKS-IPDAUU",
+    "vnetName": "[concat('VN-PDS-NMC-UKS-', variables('suffix'))]",
+    "subnetName": "[concat('SN-PDS-NMC-UKS-', variables('suffix'))]",
+    "vnetIpPrefix": "10.0.0.0/20",
+    "subnetIpPrefix": "10.0.1.0/24",
+    "publicIpAddressName": "[concat('PIP-PDS-NMC-UKS-', variables('suffix'))]",
+    "bastionHostName": "[concat('BS-PDS-NMC-UKS-', variables('suffix'))]",
+    "bastionSubnetName": "AzureBastionSubnet",
+    "bastionSubnetIpPrefix": "10.0.2.0/27",
+    "storageAccountName": "[toLower(concat('SAPDSNMCUKS', variables('suffix')))]",
+    "fileShareName": "transfer"
+},
+"resources": [
+      {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2020-05-01",
+      "name": "[variables('vnetName')]",
+      "location": "[variables('location')]",
+      "comments": "One isolated vnet is deployed per lab user.",
+      "properties": {
+        "addressSpace": {
+        "addressPrefixes": [
+          "[variables('vnetIpPrefix')]"
+        ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('SubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('SubnetIpPrefix')]"
+            }
+          },
+          {
+            "name": "[variables('bastionSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('bastionSubnetIpPrefix')]"
+            }
+          }
+          ]
+        }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2020-05-01",
+      "name": "[variables('publicIpAddressName')]", 
+      "location": "[variables('location')]",
+      "comments": "This public IP is used for the Bastion service.",
+      "sku": {
+        "name": "Standard"
+          },
+          "properties": {
+          "publicIPAllocationMethod": "Static"
+          }
+    },
+    {
+      "type": "Microsoft.Network/bastionHosts",
+      "apiVersion": "2020-05-01",
+      "name": "[variables('bastionHostName')]",
+      "location": "[variables('location')]",
+      "comments": "This Bastion service is used to access vm's in the isolated vnet.",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "IpConf",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('bastionSubnetName'))]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('bastionSubnetName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[variables('location')]",
+      "comments": "This is used to allow transfer of data to/from NMC for CyberLab user.",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+       },
+      "properties": {
+        "accessTier": "Hot",
+        "allowBlobPublicAccess": false,
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": "True"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2021-04-01",
+      "name": "[concat(variables('storageAccountName'), '/default/', variables('fileShareName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "microsoft.devtestlab/labs",
+      "apiVersion": "2018-09-15",
+      "name": "[variables('dtlName')]",
+      "location": "[variables('location')]",
+      "tags": { }
+    },
+    {
+      "type": "microsoft.devtestlab/labs/virtualnetworks",
+      "apiVersion": "2018-09-15",
+      "name": "[concat(variables('dtlName'), '/', variables('vnetName'))]",
+      "dependsOn": [
+        "[resourceId('microsoft.devtestlab/labs', variables('dtlName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetName'))]"
+      ],
+      "properties": {
+        "allowedSubnets": [
+          {
+            "resourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetName'))]",
+            "labSubnetName": "[variables('subnetName')]",
+            "allowPublicIp": "Deny"
+          }
+        ],
+        "externalProviderResourceId": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "subnetOverrides": [
+          {
+            "resourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetName'))]",
+            "labSubnetName": "[variables('subnetName')]",
+            "useInVmCreationPermission": "Allow",
+            "usePublicIpAddressPermission": "Deny"
+          }        
+        ]
+      }
+    }
+  ],
+  "outputs": {}
+}
