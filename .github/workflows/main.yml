@@ -1,0 +1,13 @@
+name: MyCliAction
+on: push
+jobs:
+  Test:   
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Azure CLI script1
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |   
+            az -v
